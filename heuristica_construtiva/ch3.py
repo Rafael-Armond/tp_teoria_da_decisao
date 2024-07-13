@@ -213,10 +213,10 @@ def fobj2(solution) -> float:
     penality = 0
 
     # Medir a porcentagem de clientes não servidos
-    penality += getPenalityForUnservedClients(solution.assignments, solution.clients) * 100
+    penality += getPenalityForUnservedClients(solution.assignments, solution.clients) * 50000
 
     # Medir a distância total entre clientes e seus respectivos PAs
-    total_distance = getSumDistanceClientsAndPAs(solution.assignments)
+    total_distance = getSumDistanceClientsAndPAs(solution.assignments) * 0.2
 
     # Calcula o fitness da solução
     fitness = total_distance + penality 
@@ -303,6 +303,10 @@ Retorna a posição de um cliente aleatório que não está servido por um PA.
 '''
 def getRandomUnservedClient(assignments: List[Dict], clients: List[Dict]) -> Tuple[float, float]:
     served_clients = {client['client_index'] for client in assignments}
+
+    if (len(served_clients) == 495):
+        return 0
+    
     unserved_clients = [(float(client['x']), float(client['y'])) for client in clients if client['client_index'] not in served_clients]
     
     client_index = np.random.randint(0, len(unserved_clients))
@@ -357,11 +361,19 @@ def shake(solution, k, probdata, func):
         4- Rearranjar a atribuição de clientes a PAs.
         '''
         unserved_client = getRandomUnservedClient(solution.assignments, probdata.clients)
+        if (unserved_client == 0):
+            if (func == 1):
+                new_solution.fitness = fobj1(new_solution)
+            elif (func == 2):
+                new_solution.fitness = fobj2(new_solution)
+
+            return new_solution
+        
         pa_position = getPAPositionFromClientPosition(unserved_client[0], unserved_client[1])
         new_solution.pas.append(pa_position)
         new_solution.assignments = rearrangeClientsAndPAs(new_solution, probdata.clients)
 
-    elif k == 2:
+    elif k == 2 and len(solution.pas) > 1:
         '''
         1- Encontrar o PA que está sendo menos utilizado.
         2- Retirar o PA da lista de PAs.
@@ -472,7 +484,7 @@ len_historico_fit_5 = 0
 func = 2 #int(input('Informe 1 para a função F1, e 2 para a função F2: '))
 
 # Máximo número de soluções candidatas avaliadas
-max_num_sol_avaliadas = 5000
+max_num_sol_avaliadas = 1000
 
 # Número de estruturas de vizinhanças definidas
 kmax = 4
@@ -486,7 +498,7 @@ while times < 2:
     # Gera uma solução inicial para o problema
     x = sol_inicial(probdata, func)
 
-    #plotSolution(x, f"Solução inicial: {times+1}")
+    plotSolution(x, f"Solução inicial: {times+1}")
 
     # Avalia solução inicial
     if (func == 1):
@@ -554,6 +566,7 @@ while times < 2:
         print('Alocação dos PAs:\n')
         print('x = {}\n'.format(x.pas))
         print('fitness(x) = {:.1f}\n'.format(x.fitness))
+        print(f"\nNumero de PAs = {len(x.pas)}")
         print('Distância total: ', getSumDistanceClientsAndPAs(x.assignments))
         print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
     
@@ -565,6 +578,7 @@ while times < 2:
         file.write(f"Resultados da otimizacao: Funcao {func} - Execucao {times+1}")
         file.write(f"\nFitness = {x.fitness}")
         file.write(f"\nPosicao dos PAs = {x.pas}")
+        file.write(f"\nNumero de PAs = {len(x.pas)}")
         file.write(f"\nPorcentagem de clientes atribuidos a um PA = {getPercentOfConnectedClients(x.assignments, x.clients)}")
         if (func == 2):
             file.write(f"\nDistancia total = {getSumDistanceClientsAndPAs(x.assignments)}")
@@ -586,8 +600,8 @@ while times < 2:
         len_historico_fit_5 = len(historico.fit)
 
     # Gráfico que mostre as ligações entre os clientes e os PAs
-    #plotSolution(x, f"Resultado final da execução: {times+1}", save_plot=True, 
-    #             file_name=f"result_funcao_{func}_execucao_{times+1}")
+    plotSolution(x, f"Resultado final da execução: {times+1}", save_plot=True, 
+                 file_name=f"result_funcao_{func}_execucao_{times+1}")
     x = 0
     times += 1
 
