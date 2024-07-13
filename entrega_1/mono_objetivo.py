@@ -461,27 +461,15 @@ def plotSolution(solution: Solution, title: str = 'Clientes e Pontos de Acesso (
     plt.title(title)
     plt.legend()
     plt.grid(True)
-    plt.show()
 
     if (save_plot):
         plt.savefig(file_name)
 
+    plt.show()
+
 '''
 Implementa a meta-heurística BVNS
 '''
-times = 0
-historico_fit_1 = []
-historico_fit_2 = []
-historico_fit_3 = []
-historico_fit_4 = []
-historico_fit_5 = []
-len_historico_fit_1 = 0
-len_historico_fit_2 = 0
-len_historico_fit_3 = 0
-len_historico_fit_4 = 0
-len_historico_fit_5 = 0
-
-func = 2 #int(input('Informe 1 para a função F1, e 2 para a função F2: '))
 
 # Máximo número de soluções candidatas avaliadas
 max_num_sol_avaliadas = 1000
@@ -491,135 +479,150 @@ kmax = 4
 
 probdata = probdef()
 
-while times < 2:
-    # Contador do número de soluções candidatas avaliadas
-    num_sol_avaliadas = 0
-
-    # Gera uma solução inicial para o problema
-    x = sol_inicial(probdata, func)
-
-    plotSolution(x, f"Solução inicial: {times+1}")
-
-    # Avalia solução inicial
-    if (func == 1):
-        x.fitness = fobj1(x)
-    elif (func == 2):
-        x.fitness = fobj2(x)
-
-    # Armazena dados para plot
-    historico = Struct()
-    historico.sol = []
-    historico.fit = []
-    historico.assignments = []
-    historico.totalDist = []
-    historico.sol.append(x.pas)
-    historico.fit.append(x.fitness)
-    historico.assignments.append(x.assignments)
-    historico.totalDist.append(getSumDistanceClientsAndPAs(x.assignments))
-
-    # Ciclo iterativo do método
-    while num_sol_avaliadas < max_num_sol_avaliadas:
-        k = 1
-        while k <= kmax:
-            
-            # Gera uma solução candidata na k-ésima vizinhança de x        
-            y = shake(x, k, probdata, func)
-            if (func == 1):
-                y.fitness = fobj1(y)
-            elif (func == 2):
-                y.fitness = fobj2(y)
-            z = bestImprovement(y, 4, probdata, func)
-            num_sol_avaliadas += 1
-            
-            # Atualiza solução corrente e estrutura de vizinhança (se necessário)
-            x, k = neighborhoodChange(x, z, k)
-            
-            # Armazena dados para plot
-            historico.sol.append(x.pas)
-            historico.fit.append(x.fitness)
-
-    if (func == 1):
-        print(f'\n--- # EXECUÇÃO {times+1} ---\n')
-        print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
-        print('Alocação dos PAs:\n')
-        print('x = {}\n'.format(historico.sol[0]))
-        print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
-        print('Número de PAs ativos: ', len(historico.sol[0]))
-        print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
-
-        print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
-        print('Alocação dos PAs:\n')
-        print('x = {}\n'.format(x.pas))
-        print('fitness(x) = {:.1f}\n'.format(x.fitness))
-        print('Número de PAs ativos: ', len(list(x.pas)))
-        print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
-    else:
-        print(f'\n--- # EXECUÇÃO {times+1} ---\n')
-        print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
-        print('Alocação dos PAs:\n')
-        print('x = {}\n'.format(historico.sol[0]))
-        print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
-        print('Distância total: ', historico.totalDist[0])
-        print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
-
-        print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
-        print('Alocação dos PAs:\n')
-        print('x = {}\n'.format(x.pas))
-        print('fitness(x) = {:.1f}\n'.format(x.fitness))
-        print(f"\nNumero de PAs = {len(x.pas)}")
-        print('Distância total: ', getSumDistanceClientsAndPAs(x.assignments))
-        print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
+for func in range(1, 3):
+    times = 0
+    historico_fit_1 = []
+    historico_fit_2 = []
+    historico_fit_3 = []
+    historico_fit_4 = []
+    historico_fit_5 = []
+    len_historico_fit_1 = 0
+    len_historico_fit_2 = 0
+    len_historico_fit_3 = 0
+    len_historico_fit_4 = 0
+    len_historico_fit_5 = 0
     
-    #assignments = x.assignments
+    while times < 5:
+        # Contador do número de soluções candidatas avaliadas
+        num_sol_avaliadas = 0
 
-    # Abrindo um arquivo texto em modo de escrita
-    with open(f'result_funcao_{func}_execucao_{times+1}.txt', 'w') as file:
-        # Escrevendo cada item da lista no arquivo
-        file.write(f"Resultados da otimizacao: Funcao {func} - Execucao {times+1}")
-        file.write(f"\nFitness = {x.fitness}")
-        file.write(f"\nPosicao dos PAs = {x.pas}")
-        file.write(f"\nNumero de PAs = {len(x.pas)}")
-        file.write(f"\nPorcentagem de clientes atribuidos a um PA = {getPercentOfConnectedClients(x.assignments, x.clients)}")
-        if (func == 2):
-            file.write(f"\nDistancia total = {getSumDistanceClientsAndPAs(x.assignments)}")
+        # Gera uma solução inicial para o problema
+        x = sol_inicial(probdata, func)
 
-    if times == 0:
-        historico_fit_1 = historico.fit
-        len_historico_fit_1 = len(historico.fit)
-    elif times == 1:
-        historico_fit_2 = historico.fit
-        len_historico_fit_2 = len(historico.fit)
-    elif times == 2:
-        historico_fit_3 = historico.fit
-        len_historico_fit_3 = len(historico.fit)
-    elif times == 3:
-        historico_fit_4 = historico.fit
-        len_historico_fit_4 = len(historico.fit)
-    else:
-        historico_fit_5 = historico.fit
-        len_historico_fit_5 = len(historico.fit)
+        plotSolution(x, f"Solução inicial: {times+1}")
 
-    # Gráfico que mostre as ligações entre os clientes e os PAs
-    plotSolution(x, f"Resultado final da execução: {times+1}", save_plot=True, 
-                 file_name=f"result_funcao_{func}_execucao_{times+1}")
-    x = 0
-    times += 1
+        # Avalia solução inicial
+        if (func == 1):
+            x.fitness = fobj1(x)
+        elif (func == 2):
+            x.fitness = fobj2(x)
 
-len_historico_fit_1 = len(historico_fit_1)
-len_historico_fit_2 = len(historico_fit_2)
-len_historico_fit_3 = len(historico_fit_3)
-len_historico_fit_4 = len(historico_fit_4)
-len_historico_fit_5 = len(historico_fit_5)
+        # Armazena dados para plot
+        historico = Struct()
+        historico.sol = []
+        historico.fit = []
+        historico.assignments = []
+        historico.totalDist = []
+        historico.sol.append(x.pas)
+        historico.fit.append(x.fitness)
+        historico.assignments.append(x.assignments)
+        historico.totalDist.append(getSumDistanceClientsAndPAs(x.assignments))
 
-plt.figure(figsize=(8,8))
-plt.plot(np.linspace(0, len_historico_fit_1 - 1, len_historico_fit_1), historico_fit_1, color='red', label='Tentativa 1')
-plt.plot(np.linspace(0, len_historico_fit_2 - 1, len_historico_fit_2), historico_fit_2, color='green', label='Tentativa 2')
-plt.plot(np.linspace(0, len_historico_fit_3 - 1, len_historico_fit_3), historico_fit_3, color='blue', label='Tentativa 3')
-plt.plot(np.linspace(0, len_historico_fit_4 - 1, len_historico_fit_4), historico_fit_4, color='black', label='Tentativa 4')
-plt.plot(np.linspace(0, len_historico_fit_5 - 1, len_historico_fit_5), historico_fit_5, color='orange', label='Tentativa 5')
-plt.title('Evolução da qualidade da solução')
-plt.xlabel('Número de avaliações')
-plt.ylabel('fitness(x)')
-plt.legend()
-plt.grid(True)
-plt.show()
+        # Ciclo iterativo do método
+        while num_sol_avaliadas < max_num_sol_avaliadas:
+            k = 1
+            while k <= kmax:
+                
+                # Gera uma solução candidata na k-ésima vizinhança de x        
+                y = shake(x, k, probdata, func)
+                if (func == 1):
+                    y.fitness = fobj1(y)
+                elif (func == 2):
+                    y.fitness = fobj2(y)
+                z = bestImprovement(y, 4, probdata, func)
+                num_sol_avaliadas += 1
+                
+                # Atualiza solução corrente e estrutura de vizinhança (se necessário)
+                x, k = neighborhoodChange(x, z, k)
+                
+                # Armazena dados para plot
+                historico.sol.append(x.pas)
+                historico.fit.append(x.fitness)
+
+        if (func == 1):
+            print(f'\n--- # EXECUÇÃO {times+1} ---\n')
+            print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
+            print('Alocação dos PAs:\n')
+            print('x = {}\n'.format(historico.sol[0]))
+            print(f"Numero de PAs = {len(historico.sol[0])}")
+            print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
+            print('Número de PAs ativos: ', len(historico.sol[0]))
+            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
+
+            print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
+            print('Alocação dos PAs:\n')
+            print('x = {}\n'.format(x.pas))
+            print('fitness(x) = {:.1f}\n'.format(x.fitness))
+            print('Número de PAs ativos: ', len(list(x.pas)))
+            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
+        else:
+            print(f'\n--- # EXECUÇÃO {times+1} ---\n')
+            print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
+            print('Alocação dos PAs:\n')
+            print('x = {}\n'.format(historico.sol[0]))
+            print(f"Numero de PAs = {len(historico.sol[0])}")
+            print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
+            print('Distância total: ', historico.totalDist[0])
+            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
+
+            print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
+            print('Alocação dos PAs:\n')
+            print('x = {}\n'.format(x.pas))
+            print('fitness(x) = {:.1f}\n'.format(x.fitness))
+            print(f"Numero de PAs = {len(x.pas)}")
+            print('Distância total: ', getSumDistanceClientsAndPAs(x.assignments))
+            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
+        
+        #assignments = x.assignments
+
+        # Abrindo um arquivo texto em modo de escrita
+        with open(f'result_funcao_{func}_execucao_{times+1}.txt', 'w') as file:
+            # Escrevendo cada item da lista no arquivo
+            file.write(f"Resultados da otimizacao: Funcao {func} - Execucao {times+1}")
+            file.write(f"\nFitness = {x.fitness}")
+            file.write(f"\nPosicao dos PAs = {x.pas}")
+            file.write(f"\nNumero de PAs = {len(x.pas)}")
+            file.write(f"\nPorcentagem de clientes atribuidos a um PA = {getPercentOfConnectedClients(x.assignments, x.clients)}")
+            if (func == 2):
+                file.write(f"\nDistancia total = {getSumDistanceClientsAndPAs(x.assignments)}")
+
+        if times == 0:
+            historico_fit_1 = historico.fit
+            len_historico_fit_1 = len(historico.fit)
+        elif times == 1:
+            historico_fit_2 = historico.fit
+            len_historico_fit_2 = len(historico.fit)
+        elif times == 2:
+            historico_fit_3 = historico.fit
+            len_historico_fit_3 = len(historico.fit)
+        elif times == 3:
+            historico_fit_4 = historico.fit
+            len_historico_fit_4 = len(historico.fit)
+        else:
+            historico_fit_5 = historico.fit
+            len_historico_fit_5 = len(historico.fit)
+
+        # Gráfico que mostre as ligações entre os clientes e os PAs
+        plotSolution(x, f"Resultado final da execução: {times+1}", save_plot=True, 
+                    file_name=f"result_funcao_{func}_execucao_{times+1}")
+        x = 0
+        times += 1
+
+    len_historico_fit_1 = len(historico_fit_1)
+    len_historico_fit_2 = len(historico_fit_2)
+    len_historico_fit_3 = len(historico_fit_3)
+    len_historico_fit_4 = len(historico_fit_4)
+    len_historico_fit_5 = len(historico_fit_5)
+
+    plt.figure(figsize=(8,8))
+    plt.plot(np.linspace(0, len_historico_fit_1 - 1, len_historico_fit_1), historico_fit_1, color='red', label='Tentativa 1')
+    plt.plot(np.linspace(0, len_historico_fit_2 - 1, len_historico_fit_2), historico_fit_2, color='green', label='Tentativa 2')
+    plt.plot(np.linspace(0, len_historico_fit_3 - 1, len_historico_fit_3), historico_fit_3, color='blue', label='Tentativa 3')
+    plt.plot(np.linspace(0, len_historico_fit_4 - 1, len_historico_fit_4), historico_fit_4, color='black', label='Tentativa 4')
+    plt.plot(np.linspace(0, len_historico_fit_5 - 1, len_historico_fit_5), historico_fit_5, color='orange', label='Tentativa 5')
+    plt.title('Evolução da qualidade da solução')
+    plt.xlabel('Número de avaliações')
+    plt.ylabel('fitness(x)')
+    plt.legend()
+    plt.grid(True)
+    plt.show()

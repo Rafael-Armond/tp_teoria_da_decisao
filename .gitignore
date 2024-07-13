@@ -1,0 +1,5 @@
+*.spyproject
+anotacoes.txt
+.venv
+*.pyc
+*.vscode

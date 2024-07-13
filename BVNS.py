@@ -7,19 +7,20 @@ import pandas as pd
 import numpy as np
 import copy as cp
 import matplotlib.pyplot as plt
+from mono_objetivo.ch3 import sol_inicial
 
 # Será usada com atributos dinâmicos
 class Struct:
     pass
 
 # Importa os dados de usuário e os insere em um dataset
-clientes_dataset = pd.read_csv('clientes.csv', header=None, names=['x', 'y', 'bandwidth'])
+clients_df = pd.read_csv('clientes.csv', header=None, names=['x', 'y', 'bandwidth'])
 
 '''
 Mostra a distribuição dos clientes
 '''
 plt.figure(figsize=(8,8))
-plt.scatter(clientes_dataset['x'], clientes_dataset['y'], alpha=0.8)
+plt.scatter(clients_df['x'], clients_df['y'], alpha=0.8)
 plt.title('Distribuição Espacial dos Clientes')
 plt.xlabel('Posição X')
 plt.ylabel('Posição Y')
@@ -38,7 +39,7 @@ Define os dados de uma instância arbitrária do problema
 '''
 def probdef():
     # Definições do problema
-    max_p_as = 30  # Número máximo de pontos de acesso
+    max_pas = 30  # Número máximo de pontos de acesso
     pa_capacity = 54  # Capacidade de cada ponto de acesso em Mbps
     max_distance = 85  # Distância máxima de atendimento em metros
     lambda_exposure = 1  # Coeficiente de exposição (sinal nominal)
@@ -46,103 +47,14 @@ def probdef():
     
     # Criar uma instância de Struct para armazenar os dados do problema
     probdata = Struct()
-    probdata.clients = clientes_dataset
-    probdata.max_p_as = max_p_as
+    probdata.clients = clients_df
+    probdata.max_pas = max_pas
     probdata.pa_capacity = pa_capacity
     probdata.max_distance = max_distance
     probdata.lambda_exposure = lambda_exposure
     probdata.gamma = gamma
 
     return probdata
-
-def sol_inicial(probdata, use_constructive_heuristic=True, qtd_pas_region_1 = 10, qtd_pas_region_2 = 10, qtd_pas_region_3 = 10):
-    np.random.seed(42)  # Para reprodutibilidade
-    
-    # Inicializa a estrutura para a solução
-    solution = Struct()
-    solution.pas = []  # Lista para armazenar a posição dos pontos de acesso
-    solution.assignments = []  # Lista para armazenar a qual PA cada cliente está atribuído
-    grid_spacing = 5  # Espaçamento do grid em metros
-    
-    if use_constructive_heuristic:
-        grid_points_x_region_1 = np.arange(0, 200 + 1, grid_spacing)
-        grid_points_y_region_1 = np.arange(0, 200 + 1, grid_spacing)
-        grid_points_x_region_2 = np.arange(201, 400 + 1, grid_spacing)
-        grid_points_y_region_2 = np.arange(0, 200 + 1, grid_spacing)
-        grid_points_x_region_3 = np.arange(0, 400 + 1, grid_spacing)
-        grid_points_y_region_3 = np.arange(201, 400 + 1, grid_spacing)
-        
-        # Alocando 10 PAs na primeira região
-        for _ in range(qtd_pas_region_1):
-            x = np.random.choice(grid_points_x_region_1)
-            y = np.random.choice(grid_points_y_region_1)
-            solution.pas.append((x, y))
-            
-        # Alocando 10 PAs na segunda região
-        for _ in range(qtd_pas_region_2):
-            x = np.random.choice(grid_points_x_region_2)
-            y = np.random.choice(grid_points_y_region_2)
-            solution.pas.append((x, y))
-            
-        # Alocando 10 PAs na terceira região
-        for _ in range(qtd_pas_region_3):
-            x = np.random.choice(grid_points_x_region_3)
-            y = np.random.choice(grid_points_y_region_3)
-            solution.pas.append((x, y))
-    else:  
-        # Distribuir aleatoriamente os pontos de acesso dentro da área do centro de convenções no grid de 5x5 metros
-        grid_points_x = np.arange(0, 400 + 1, grid_spacing)
-        grid_points_y = np.arange(0, 400 + 1, grid_spacing)
-        for _ in range(probdata.max_p_as):
-            x = np.random.choice(grid_points_x)
-            y = np.random.choice(grid_points_y)
-            solution.pas.append((x, y))
-    
-    # Atribuir clientes a pontos de acesso
-    # Inicializa um dicionário para rastrear a capacidade utilizada de cada PA
-    pa_bandwidth_usage = {i: 0 for i in range(probdata.max_p_as)}
-    
-    for index, client in probdata.clients.iterrows():
-        # Encontrar o PA mais próximo que pode acomodar o cliente sem exceder a capacidade
-        assigned = False
-        # Lista com 30 posições. Cada posição representa a ditância entre o PA e o cliente X em questão 
-        distances = [np.sqrt((pa[0] - client['x'])**2 + (pa[1] - client['y'])**2) for pa in solution.pas]
-        
-        # Ordena os PAs por distância
-        possible_pas = sorted(range(len(distances)), key=lambda k: distances[k])
-        
-        for pa_index in possible_pas:
-            if distances[pa_index] <= probdata.max_distance and pa_bandwidth_usage[pa_index] + client['bandwidth'] <= probdata.pa_capacity:
-                # Atribui o cliente a este PA
-                solution.assignments.append(pa_index)
-                pa_bandwidth_usage[pa_index] += client['bandwidth']
-                assigned = True
-                break
-        
-        if not assigned:
-            # Se nenhum PA pôde acomodar o cliente, atribui a um PA que viola a distância mínima (necessário para casos iniciais)
-            solution.assignments.append(possible_pas[0])
-    
-    # Mostra a distribuição espacial dos PAs na solução inicial
-    x_pos, y_pos = zip(*solution.pas)
-    plt.figure(figsize=(8,8))
-    plt.scatter(
-        x_pos, 
-        y_pos, 
-        alpha=0.8,
-        color='red')
-    plt.title('Distribuição Espacial dos PAs')
-    plt.xlabel('Posição X')
-    plt.ylabel('Posição Y')
-    plt.grid(True, which='major', linestyle='-', linewidth=0.5)
-    plt.axis([0, 400, 0, 400])
-    plt.xticks(range(0, 401, 25))
-    plt.yticks(range(0, 401, 25))
-    plt.minorticks_on()
-    plt.grid(True, which='minor', linestyle=':', linewidth=0.5) 
-    plt.show()
-    
-    return solution
 
 '''
 Implementa a função objetivo 1 do problema
@@ -151,7 +63,7 @@ def fobj1(solution, probdata):
     # Inicializa o contador de PAs ativos
     active_pas = set()
     # Contabilizar o uso de cada PA e verificar as distâncias
-    pa_bandwidth_usage = [0] * probdata.max_p_as
+    pa_bandwidth_usage = [0] * probdata.max_pas
     number_of_clients = len(probdata.clients)
     allowed_unserved = int(0.02 * number_of_clients)  # 2% dos clientes podem não ser servidos
     unserved_clients = 0
@@ -229,7 +141,7 @@ def fobj2(solution, probdata):
         penalties += 5000  # Penalidade adicional por alto número de clientes não atendidos
 
     # Verificar o número de PAs ativos
-    if sum(pa_active) > probdata.max_p_as:
+    if sum(pa_active) > probdata.max_pas:
         penalties += 10000  # Penalidade por excesso de PAs ativos
 
     # Cálculo do fitness
@@ -248,6 +160,9 @@ def neighborhoodChange(x, y, k):
         k += 1
     return x, k
 
+'''
+Solução inicial
+'''
 
 '''
 Implementa a função shake
@@ -323,12 +238,12 @@ len_historico_fit_5 = 0
 
 func = int(input('Informe 1 para a função F1, e 2 para a função F2: '))
 
-while times < 5:
+while times < 1:
     # Contador do número de soluções candidatas avaliadas
     num_sol_avaliadas = 0
 
     # Máximo número de soluções candidatas avaliadas
-    max_num_sol_avaliadas = 10000
+    max_num_sol_avaliadas = 20
 
     # Número de estruturas de vizinhanças definidas
     kmax = 3
@@ -336,12 +251,14 @@ while times < 5:
     probdata = probdef()
 
     # Gera uma solução inicial para o problema
-    x = sol_inicial(
-        probdata, 
-        use_constructive_heuristic=False, 
-        qtd_pas_region_1 = 15,
-        qtd_pas_region_2 = 5,
-        qtd_pas_region_3 = 10)
+    # x = sol_inicial(
+    #     probdata, 
+    #     use_constructive_heuristic=False, 
+    #     qtd_pas_region_1 = 15,
+    #     qtd_pas_region_2 = 5,
+    #     qtd_pas_region_3 = 10)
+
+    x = sol_inicial(probdata, clients_df=clients_df)
 
     # Avalia solução inicial
     if (func == 1):
@@ -407,15 +324,15 @@ while times < 5:
     # Gráfico que mostre as ligações entre os clientes e os PAs
     plt.figure(figsize=(8,8))
     # Plotando os clientes
-    plt.scatter(clientes_dataset['x'], clientes_dataset['y'], color='blue', label='Clientes', alpha=0.8)
+    plt.scatter(clients_df['x'], clients_df['y'], color='blue', label='Clientes', alpha=0.8)
     # Plotando os PA's
     x_pas, y_pas = zip(*x.pas)
     plt.scatter(x_pas, y_pas, color='red', marker='s', label='PA', alpha=0.8)
     # Desenhar as linhas conectando clientes e pontos de acesso
     clients_pas_location = [x.pas[x.assignments[i]] for i in x.assignments]
     #print('clients_pas: ', clients_pas)
-    x_client = clientes_dataset['x'].to_numpy()
-    y_client = clientes_dataset['y'].to_numpy()
+    x_client = clients_df['x'].to_numpy()
+    y_client = clients_df['y'].to_numpy()
     for client_index, pa_index in enumerate(x.assignments):
         client_x = x_client[client_index]
         client_y = y_client[client_index]
