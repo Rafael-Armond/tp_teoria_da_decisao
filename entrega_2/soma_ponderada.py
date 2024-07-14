@@ -9,6 +9,12 @@ from collections import defaultdict
 
 clients_df = pd.read_csv('clientes.csv', header=None, names=['x', 'y', 'bandwidth'])
 
+# Valores mínimos e máximos esperados para normalização
+min_f1 = 0
+max_f1 = 100
+min_f2 = 0
+max_f2 = 100000
+
 class Solution:
     pass
 
@@ -39,7 +45,7 @@ clients_df = Dataframe com as coordenadas e consumo de banda de cada cliente
 
 Retorno: Uma solução candidata (A primeira do problema)
 '''
-def sol_inicial(probdata, func) -> Solution:
+def sol_inicial(probdata, w) -> Solution:
     start_time = time.time()
 
     solution = Solution()
@@ -49,7 +55,7 @@ def sol_inicial(probdata, func) -> Solution:
     max_radius = probdata.max_distance
     num_clients = probdata.num_clients
     minimum_clients_assigned = 0.7
-    minimum_bandwidth_consumption = (0.1 * 54) if func == 2 else (0.65 * 54)  
+    minimum_bandwidth_consumption = ((0.7 * w[0]) * 54)  
     solution.clients = probdata.clients
     possible_assignments = []
 
@@ -107,9 +113,10 @@ def sol_inicial(probdata, func) -> Solution:
 
     end_time = time.time()
     execution_time = (end_time - start_time) / 60
-    print("Tempo de execução: ", execution_time)
+    print("\nTempo de execução para solução inicial: ", execution_time)
 
     return solution
+
 
 '''
 Zera a propriedade 'assigned' dos clientes para que possa ser feito um rearranjo.
@@ -271,7 +278,7 @@ def UpdatePAPosition(x, y, grid_spacing: int = 5) -> int:
     x = max(0, min(x, 400))
     y = max(0, min(y, 400))
 
-    return x, y
+    return float(x), float(y)
 
 def getClientsListFromDF(clients_df: pd.DataFrame) -> List:
     clients = []
@@ -342,7 +349,7 @@ Função shake
 Parâmetros de entrada: Uma solução candidata, uma estrutura de vizinhança e os dados do problema.
 Retorno: Uma nova solução candidata
 '''
-def shake(solution, k, probdata, func):
+def shake(solution, k, probdata):
     np.random.seed() 
     new_solution = cp.deepcopy(solution) 
 
@@ -362,11 +369,6 @@ def shake(solution, k, probdata, func):
         '''
         unserved_client = getRandomUnservedClient(solution.assignments, probdata.clients)
         if (unserved_client == 0):
-            if (func == 1):
-                new_solution.fitness = fobj1(new_solution)
-            elif (func == 2):
-                new_solution.fitness = fobj2(new_solution)
-
             return new_solution
         
         pa_position = getPAPositionFromClientPosition(unserved_client[0], unserved_client[1])
@@ -416,213 +418,158 @@ def shake(solution, k, probdata, func):
 
         new_solution.assignments = rearrangeClientsAndPAs(new_solution, probdata.clients)
 
-    if (func == 1):
-        new_solution.fitness = fobj1(new_solution)
-    elif (func == 2):
-        new_solution.fitness = fobj2(new_solution)
-
     return new_solution
 
 '''
 Heurística de busca local.
 '''
-def bestImprovement(current_solution, kmax, probdata, func):
+def bestImprovement(current_solution, kmax, probdata):
     best_solution = cp.deepcopy(current_solution)
-    # best_solution.fitness = current_solution.fitness
-    # print('best_solution.fitness: ', best_solution.fitness)
-    # print('current_solution.fitness: ', current_solution.fitness)
 
     for i in range(1, kmax + 1):
-        neighbor_solution = shake(best_solution, i, probdata, func) 
+        neighbor_solution = shake(best_solution, i, probdata) 
         if neighbor_solution.fitness < best_solution.fitness:
             best_solution = neighbor_solution
     
     return best_solution
 
-def plotSolution(solution: Solution, title: str = 'Clientes e Pontos de Acesso (PAs)', 
-                 save_plot: bool = False, file_name: str = "plot") -> None:
-    plt.figure(figsize=(10, 10))
+'''
+Implementa a meta-heurística BVNS com a soma ponderada para otimização multiobjetivo.
+'''
+def bvns(fobj, x, probdata, approachinfo, maxeval=1000):
+    # Contador do número de soluções candidatas avaliadas
+    num_sol_avaliadas = 0
+
+    # Máximo número de soluções candidatas avaliadas
+    max_num_sol_avaliadas = maxeval
+
+    # Número de estruturas de vizinhanças definidas
+    kmax = 4
+
+    # Avalia solução inicial
+    x = fobj(x, approachinfo)
+    num_sol_avaliadas += 1
+
+    # Ciclo iterativo do método
+    while num_sol_avaliadas < max_num_sol_avaliadas:
+        k = 1
+        while k <= kmax:        
+            y = shake(x, k, probdata)
+            y = fobj(y, approachinfo)
+            z = bestImprovement(y, 4, probdata) # heurística de busca local
+            num_sol_avaliadas += 1
+            
+            x, k = neighborhoodChange(x, z, k)
     
-    # Plotar os clientes
-    for client in clients_df.itertuples():
-        plt.scatter(client.x, client.y, c='blue', label='Cliente' if client.Index == 0 else "")
+    return x
+
+'''
+Implementa a função objetivo do problema
+'''
+def obj_functions(x, w):
+    f1_fitness = fobj1(x) # Já obtem o valor de fitness para f1 devidamente penalizado
+    f2_fitness = fobj2(x) # Já obtem o valor de fitness para f2 devidamente penalizado
     
-    # Plotar os PAs
-    for pa in solution.pas:
-        plt.scatter(float(pa[0]), float(pa[1]), c='red', marker='X', label='PA' if solution.pas.index(pa) == 0 else "")
+    # Calcula os valores normalizados de fitness
+    f1_fitness_normalizado = normalize(f1_fitness, min_f1, max_f1)
+    f2_fitness_normalizado = normalize(f2_fitness, min_f2, max_f2)
+
+    x.f1_fitness = f1_fitness_normalizado
+    x.f2_fitness = f2_fitness_normalizado
+
+    x.total_distance = getSumDistanceClientsAndPAs(x.assignments)
     
-    # Desenhar linhas entre PAs e seus clientes
-    for assignment in solution.assignments:
-        plt.plot([assignment['x_pa'], assignment['x_client']], 
-                 [assignment['y_pa'], assignment['y_client']], 'k-', alpha=0.2)
+    # Calcula o fitness da otimização multiobjetivo (com os valores normalizados)
+    x.fitness = w[0]*f1_fitness_normalizado + w[1]*f2_fitness_normalizado
+
+    return x
+
+'''
+Função para normalizar os valores de fitness
+'''
+def normalize(value, min_value, max_value):
+    return (value - min_value) / (max_value - min_value)
+
+'''
+Implementa a função soma ponderada
+'''
+def pw_function(x, approachinfo):
+    x = obj_functions(x, approachinfo.w)
+    x.single_objective_value = np.dot(approachinfo.w, np.transpose(np.array(x.fitness)))
+
+    return x
+
+def is_dominated(sol_a, sol_b):
+    """Retorna True se sol_a for dominada por sol_b, caso contrário False."""
+    return all(x <= y for x, y in zip(sol_a, sol_b)) and any(x < y for x, y in zip(sol_a, sol_b))
+
+def find_non_dominated_solutions(solutions):
+    """Retorna uma lista de soluções não dominadas."""
+    non_dominated = []
+    for i, sol_a in enumerate(solutions):
+        dominated = False
+        for j, sol_b in enumerate(solutions):
+            if i != j and is_dominated(sol_a, sol_b):
+                dominated = True
+                break
+        if not dominated:
+            non_dominated.append(sol_a)
+    return non_dominated
+
+def plot_solutions(all_solutions, non_dominated_solutions):
+    # Separando os valores de fitness de f1 e f2 para todas as soluções
+    all_f1 = [sol[0] for sol in all_solutions]
+    all_f2 = [sol[1] for sol in all_solutions]
     
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title(title)
+    # Separando os valores de fitness de f1 e f2 para as soluções não dominadas
+    nd_f1 = [sol[0] for sol in non_dominated_solutions]
+    nd_f2 = [sol[1] for sol in non_dominated_solutions]
+    
+    # Criando o gráfico de dispersão
+    plt.figure(figsize=(10, 6))
+    
+    # Plotando todas as soluções
+    plt.scatter(all_f1, all_f2, c='blue', label='Todas as soluções', alpha=0.5)
+    
+    # Destacando as soluções não dominadas
+    plt.scatter(nd_f1, nd_f2, c='red', label='Soluções não dominadas', edgecolors='black', s=100)
+    
+    # Adicionando título e rótulos aos eixos
+    plt.title('Soluções e Soluções Não Dominadas')
+    plt.xlabel('Fitness f1')
+    plt.ylabel('Fitness f2')
+    
+    # Adicionando legenda
     plt.legend()
-    plt.grid(True)
-
-    if (save_plot):
-        plt.savefig(file_name)
-
+    
+    # Mostrando o gráfico
     plt.show()
-
-'''
-Implementa a meta-heurística BVNS
-'''
-
-# Máximo número de soluções candidatas avaliadas
-max_num_sol_avaliadas = 1000
-
-# Número de estruturas de vizinhanças definidas
-kmax = 4
-
+# Faz a leitura dos dados da instância do problema 
 probdata = probdef()
 
-for func in range(1, 3):
-    times = 0
-    historico_fit_1 = []
-    historico_fit_2 = []
-    historico_fit_3 = []
-    historico_fit_4 = []
-    historico_fit_5 = []
-    len_historico_fit_1 = 0
-    len_historico_fit_2 = 0
-    len_historico_fit_3 = 0
-    len_historico_fit_4 = 0
-    len_historico_fit_5 = 0
-    
-    while times < 5:
-        # Contador do número de soluções candidatas avaliadas
-        num_sol_avaliadas = 0
+# Armazena dados para plot
+archive = Struct()
+archive.sol = []
+archive.fitpen = []
 
-        # Gera uma solução inicial para o problema
-        x = sol_inicial(probdata, func)
+# Armazena dados da estratégia de otimização mono-objetivo
+approachinfo = Struct()
 
-        plotSolution(x, f"Solução inicial: {times+1}")
+N = 15
+for i in np.arange(0, N, 1):
+    w = np.random.random(size=2)  # gera um vetor de pesos aleatórios
+    w = w/sum(w)                  # normaliza o vetor de pesos 
 
-        # Avalia solução inicial
-        if (func == 1):
-            x.fitness = fobj1(x)
-        elif (func == 2):
-            x.fitness = fobj2(x)
+    # Gera solução inicial
+    x = sol_inicial(probdata, w)
 
-        # Armazena dados para plot
-        historico = Struct()
-        historico.sol = []
-        historico.fit = []
-        historico.assignments = []
-        historico.totalDist = []
-        historico.sol.append(x.pas)
-        historico.fit.append(x.fitness)
-        historico.assignments.append(x.assignments)
-        historico.totalDist.append(getSumDistanceClientsAndPAs(x.assignments))
+    approachinfo.w = w
+    x = bvns(pw_function, x, probdata, approachinfo, maxeval=200)
 
-        # Ciclo iterativo do método
-        while num_sol_avaliadas < max_num_sol_avaliadas:
-            k = 1
-            while k <= kmax:
-                
-                # Gera uma solução candidata na k-ésima vizinhança de x        
-                y = shake(x, k, probdata, func)
-                if (func == 1):
-                    y.fitness = fobj1(y)
-                elif (func == 2):
-                    y.fitness = fobj2(y)
-                z = bestImprovement(y, 4, probdata, func)
-                num_sol_avaliadas += 1
-                
-                # Atualiza solução corrente e estrutura de vizinhança (se necessário)
-                x, k = neighborhoodChange(x, z, k)
-                
-                # Armazena dados para plot
-                historico.sol.append(x.pas)
-                historico.fit.append(x.fitness)
+    archive.fitpen.append((x.f1_fitness, x.f2_fitness))
 
-        if (func == 1):
-            print(f'\n--- # EXECUÇÃO {times+1} ---\n')
-            print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
-            print('Alocação dos PAs:\n')
-            print('x = {}\n'.format(historico.sol[0]))
-            print(f"Numero de PAs = {len(historico.sol[0])}")
-            print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
-            print('Número de PAs ativos: ', len(historico.sol[0]))
-            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
 
-            print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
-            print('Alocação dos PAs:\n')
-            print('x = {}\n'.format(x.pas))
-            print('fitness(x) = {:.1f}\n'.format(x.fitness))
-            print('Número de PAs ativos: ', len(list(x.pas)))
-            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
-        else:
-            print(f'\n--- # EXECUÇÃO {times+1} ---\n')
-            print('\n--- SOLUÇÃO INICIAL CONSTRUÍDA ---\n')
-            print('Alocação dos PAs:\n')
-            print('x = {}\n'.format(historico.sol[0]))
-            print(f"Numero de PAs = {len(historico.sol[0])}")
-            print('fitness(x) = {:.1f}\n'.format(historico.fit[0]))
-            print('Distância total: ', historico.totalDist[0])
-            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(historico.assignments[0], x.clients)}')
-
-            print('\n--- MELHOR SOLUÇÃO ENCONTRADA ---\n')
-            print('Alocação dos PAs:\n')
-            print('x = {}\n'.format(x.pas))
-            print('fitness(x) = {:.1f}\n'.format(x.fitness))
-            print(f"Numero de PAs = {len(x.pas)}")
-            print('Distância total: ', getSumDistanceClientsAndPAs(x.assignments))
-            print(f'Porcentagem de clientes atribuídos a um PA: {getPercentOfConnectedClients(x.assignments, x.clients)}')
-        
-        #assignments = x.assignments
-
-        # Abrindo um arquivo texto em modo de escrita
-        with open(f'result_funcao_{func}_execucao_{times+1}.txt', 'w') as file:
-            # Escrevendo cada item da lista no arquivo
-            file.write(f"Resultados da otimizacao: Funcao {func} - Execucao {times+1}")
-            file.write(f"\nFitness = {x.fitness}")
-            file.write(f"\nPosicao dos PAs = {x.pas}")
-            file.write(f"\nNumero de PAs = {len(x.pas)}")
-            file.write(f"\nPorcentagem de clientes atribuidos a um PA = {getPercentOfConnectedClients(x.assignments, x.clients)}")
-            if (func == 2):
-                file.write(f"\nDistancia total = {getSumDistanceClientsAndPAs(x.assignments)}")
-
-        if times == 0:
-            historico_fit_1 = historico.fit
-            len_historico_fit_1 = len(historico.fit)
-        elif times == 1:
-            historico_fit_2 = historico.fit
-            len_historico_fit_2 = len(historico.fit)
-        elif times == 2:
-            historico_fit_3 = historico.fit
-            len_historico_fit_3 = len(historico.fit)
-        elif times == 3:
-            historico_fit_4 = historico.fit
-            len_historico_fit_4 = len(historico.fit)
-        else:
-            historico_fit_5 = historico.fit
-            len_historico_fit_5 = len(historico.fit)
-
-        # Gráfico que mostre as ligações entre os clientes e os PAs
-        plotSolution(x, f"Resultado final da execução: {times+1}", save_plot=True, 
-                    file_name=f"result_funcao_{func}_execucao_{times+1}")
-        x = 0
-        times += 1
-
-    len_historico_fit_1 = len(historico_fit_1)
-    len_historico_fit_2 = len(historico_fit_2)
-    len_historico_fit_3 = len(historico_fit_3)
-    len_historico_fit_4 = len(historico_fit_4)
-    len_historico_fit_5 = len(historico_fit_5)
-
-    plt.figure(figsize=(8,8))
-    plt.plot(np.linspace(0, len_historico_fit_1 - 1, len_historico_fit_1), historico_fit_1, color='red', label='Tentativa 1')
-    plt.plot(np.linspace(0, len_historico_fit_2 - 1, len_historico_fit_2), historico_fit_2, color='green', label='Tentativa 2')
-    plt.plot(np.linspace(0, len_historico_fit_3 - 1, len_historico_fit_3), historico_fit_3, color='blue', label='Tentativa 3')
-    plt.plot(np.linspace(0, len_historico_fit_4 - 1, len_historico_fit_4), historico_fit_4, color='black', label='Tentativa 4')
-    plt.plot(np.linspace(0, len_historico_fit_5 - 1, len_historico_fit_5), historico_fit_5, color='orange', label='Tentativa 5')
-    plt.title('Evolução da qualidade da solução')
-    plt.xlabel('Número de avaliações')
-    plt.ylabel('fitness(x)')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+non_dominated_solutions = find_non_dominated_solutions(archive.fitpen)
+plot_solutions(archive.fitpen, non_dominated_solutions)
+print("Soluções não dominadas:", non_dominated_solutions)
+print("Todas as soluções: ", archive.fitpen)
